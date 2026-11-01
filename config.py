@@ -10,5 +10,8 @@ class Settings(BaseSettings):
 
     API_V1_STR: str = "/api/v1"
 
+    CHESS_URL: str = "https://www.chess.com"
+
+    CHESS_PROFILE_DIR: str = ""
+
 settings = Settings()
- 

@@ -218,3 +218,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local browser profile and bot data
+data/
+*.env
+
+# Local browser profile and bot data
+data/
+*.env
