@@ -127,13 +127,34 @@ class ChessDriver:
 
         await self.parse_board(page)
 
-    async def parse_board(self, page: Page):
+    async def parse_board(self, page: Page) -> str:
         parser = BoardParser()
+        board_selector = "wc-chess-board"
 
-        await page.wait_for_selector("wc-chess-board .piece")
+        await page.wait_for_selector(f"{board_selector} .piece")
 
-        fen = await parser.extract_fen(page, "w")
+        classes = await page.locator(
+            board_selector
+        ).get_attribute("class") or ""
 
-        logger.info(fen)
+        my_color = "b" if "flipped" in classes else "w"
 
+        has_highlights = await page.locator(
+            f"{board_selector} .highlight"
+        ).count() > 0
+
+        if not has_highlights:
+            active_turn = "w"
+        else:
+            move_nodes = await page.locator(
+                "vertical-move-list .node"
+            ).count()
+            active_turn = "w" if (move_nodes % 2 == 0) else "b"
+
+        fen = await parser.extract_fen(page, active_turn)
+
+        logger.info(f"[FEN]: {fen}")
+        logger.info(f"My color: {my_color}")
+
+        return fen
         
