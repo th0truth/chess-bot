@@ -1,10 +1,9 @@
 from typing import Optional, Literal
 from collections.abc import AsyncGenerator
 
-from patchright.async_api import TimeoutError as PWTimeout
 from patchright.async_api import (
-    Playwright, BrowserContext, Page,
-    async_playwright
+    Playwright, BrowserContext,
+    Page, Locator, async_playwright
 ) 
 
 from logger import get_logger
@@ -117,22 +116,24 @@ class ChessDriver:
                 f"[-] Failed to load {url}: {e}"
             )
 
-        async with StockfishEngine() as engine:
-            async for fen in self._parse_board(page):
-                analysis = await engine.get_best_move(fen)
-
-                logger.info(analysis)
-
-
-    async def _parse_board(self, page: Page) -> AsyncGenerator[str, None, None]:
-        parser = BoardParser()
         board_selector = "wc-chess-board"
 
         await page.wait_for_selector(f"{board_selector} .piece")
 
-        classes = await page.locator(
-            board_selector
-        ).get_attribute("class") or ""
+        board_elem = page.locator(board_selector)
+
+        async with StockfishEngine() as engine:
+            async for fen in self._parse_board(page, board_elem):
+                analysis = await engine.get_best_move(fen)
+
+                logger.info(analysis)
+
+    async def _parse_board(
+        self, page: Page, board_elem: Locator
+    ) -> AsyncGenerator[str, None, None]:
+        parser = BoardParser()
+
+        classes = await board_elem.get_attribute("class") or ""
 
         my_color = "BLACK" if "flipped" in classes else "WHITE"
 
@@ -143,7 +144,7 @@ class ChessDriver:
         last_fen = None
 
         while True:
-            active_turn = await self._determine_turn(page, board_selector)
+            active_turn = await self._determine_turn(page, board_elem)
             current_fen = await parser.extract_fen(page, active_turn)
 
             if current_fen != last_fen:
@@ -153,11 +154,9 @@ class ChessDriver:
             await page.wait_for_timeout(5000)
 
     async def _determine_turn(
-        self, page: Page, board_selector: str
+        self, page: Page, board_elem: Locator
     ) -> Literal["w", "b"]:
-        has_highlights = await page.locator(
-            f"{board_selector} .highlight"
-        ).count() > 0
+        has_highlights = await board_elem.locator(f".highlight").count() > 0
 
         if not has_highlights:
             active_turn = "w"
