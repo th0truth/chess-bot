@@ -11,5 +11,6 @@ class Settings(BaseSettings):
     )
 
     CHESS_PROFILE_DIR: Optional[str] = None
+    STOCKFISH_ENGINE_PATH: Optional[str] = None
 
 settings = Settings()
