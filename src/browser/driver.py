@@ -9,6 +9,7 @@ from patchright.async_api import (
 from logger import get_logger
 
 from browser.parser import BoardParser
+from browser.humanize import Humanize
 
 from engine import StockfishEngine
 
@@ -119,27 +120,42 @@ class ChessDriver:
         board_selector = "wc-chess-board"
 
         await page.wait_for_selector(f"{board_selector} .piece")
-
         board_elem = page.locator(board_selector)
-
-        async with StockfishEngine() as engine:
-            async for fen in self._parse_board(page, board_elem):
-                analysis = await engine.get_best_move(fen)
-
-                logger.info(analysis)
-
-    async def _parse_board(
-        self, page: Page, board_elem: Locator
-    ) -> AsyncGenerator[str, None, None]:
-        parser = BoardParser()
 
         classes = await board_elem.get_attribute("class") or ""
 
-        my_color = "BLACK" if "flipped" in classes else "WHITE"
+        is_flipped = "flipped" in classes
+        my_color = "BLACK" if is_flipped else "WHITE"
+        my_side = "b" if is_flipped else "w"
 
         logger.info(
             f"[MATCH JOINED] Playing as: {my_color}"
         )
+
+        async with StockfishEngine() as engine:
+            async for fen in self._parse_board(page, board_elem):
+                active_turn = fen.split()[1]
+
+                if active_turn == my_side: 
+                    analysis = await engine.get_best_move(fen)
+
+                    if analysis and analysis["move"]:
+                        promotion_piece = (
+                            analysis["move"][4]
+                            if len(analysis["move"]) > 4 else None 
+                        )
+
+                        await Humanize.make_moves(
+                            page, board_elem,
+                            analysis["from_square"],
+                            analysis["to_square"],
+                            is_flipped, promotion_piece
+                        )
+
+    async def _parse_board(
+        self, page: Page, board_elem: Locator
+    ) -> AsyncGenerator[str, None, None]:
+        parser = BoardParser() 
 
         last_fen = None
 
