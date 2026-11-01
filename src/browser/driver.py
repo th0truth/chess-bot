@@ -1,5 +1,6 @@
 from typing import Optional, Literal
 from collections.abc import AsyncGenerator
+import re
 
 from patchright.async_api import (
     Playwright, BrowserContext,
@@ -7,6 +8,8 @@ from patchright.async_api import (
 ) 
 
 from logger import get_logger
+
+from constants import Chess 
 
 from browser.parser import BoardParser
 from browser.humanize import Humanize
@@ -101,6 +104,7 @@ class ChessDriver:
         await self.close()
         await self.connect()
 
+
     async def run(self, url: str):
         await self._ensure_connected()
 
@@ -117,6 +121,23 @@ class ChessDriver:
                 f"[-] Failed to load {url}: {e}"
             )
 
+        match url:
+            case Chess.ONLINE:
+                await Humanize.click_start_game(page)
+
+                await page.wait_for_url(
+                    f"{Chess.COMPETITIVE}/**", timeout=60000
+                )
+
+                await self._activate_bot(page)
+            case Chess.COMPUTER:
+                await self._activate_bot(page)
+            case _:
+                logger.warning(
+                    f"Unsupported game mode: {url}"
+                )
+
+    async def _activate_bot(self, page: Page):
         board_selector = "wc-chess-board"
 
         await page.wait_for_selector(f"{board_selector} .piece")

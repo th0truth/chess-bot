@@ -49,6 +49,15 @@ class Humanize:
                 await page.locator(promo_selector).click()
 
     @staticmethod
+    async def click_start_game(page: Page):
+        panel_elem = page.locator(".new-game-component")
+        await panel_elem.wait_for(state="visible", timeout=60000)
+
+        await panel_elem.get_by_text(
+            "Start Game"
+        ).click()
+
+    @staticmethod
     def _square_to_coords(square: str, box: dict, is_flipped: bool) -> Tuple:
         col = ord(square[0].lower()) - ord('a')
         rank = int(square[1])
