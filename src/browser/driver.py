@@ -1,5 +1,5 @@
 from typing import Optional, Literal
-import time
+from collections.abc import AsyncGenerator
 
 from patchright.async_api import TimeoutError as PWTimeout
 from patchright.async_api import (
@@ -10,6 +10,8 @@ from patchright.async_api import (
 from logger import get_logger
 
 from browser.parser import BoardParser
+
+from engine import StockfishEngine
 
 
 logger = get_logger(__name__)
@@ -99,9 +101,7 @@ class ChessDriver:
         await self.close()
         await self.connect()
 
-    async def run(
-        self, url: str, attempts: int = 2
-    ):
+    async def run(self, url: str):
         await self._ensure_connected()
 
         page = (
@@ -110,25 +110,21 @@ class ChessDriver:
             else await self._context.new_page()
         )
 
-        for attempt in range(attempts):
-            try:
-                logger.info(
-                    f"Navigating to {url} (attempt {attempt + 1}/{attempts})..."
-                )
+        try:
+            await page.goto(url, wait_until="domcontentloaded")
+        except Exception as e:
+            logger.warning(
+                f"[-] Failed to load {url}: {e}"
+            )
 
-                await page.goto(url, wait_until="domcontentloaded")
+        async with StockfishEngine() as engine:
+            async for fen in self._parse_board(page):
+                analysis = await engine.get_best_move(fen)
 
-                break
-            except Exception as e:
-                logger.warning(
-                    f"Goto failed (attempt {attempt + 1}/{attempts}): {e}"
-                )
-                
-                await page.wait_for_timeout(3000)
+                logger.info(analysis)
 
-        await self.parse_board(page)
 
-    async def parse_board(self, page: Page) -> str:
+    async def _parse_board(self, page: Page) -> AsyncGenerator[str, None, None]:
         parser = BoardParser()
         board_selector = "wc-chess-board"
 
@@ -152,6 +148,7 @@ class ChessDriver:
 
             if current_fen != last_fen:
                 last_fen = current_fen
+                yield current_fen
             
             await page.wait_for_timeout(5000)
 
