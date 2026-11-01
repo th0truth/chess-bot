@@ -15,29 +15,36 @@ logger = get_logger(__name__)
 
 
 class ChessDriver:
-    def __init__(self):
+    def __init__(
+        self,
+        profile_dir: Optional[str] = "./data/chess_profile"
+    ):
         self._pw: Optional[Playwright] = None
         self._context: Optional[BrowserContext] = None
+        self.profile_dir = profile_dir
 
     async def connect(self):
         """Establish connection to ChessDriver"""
 
+        if not self.profile_dir:
+            logger.warning(
+                f"ChessDriver without profile session"
+            )
+
         try:
             context_kwargs = {
-                "channel": "chromium",
-                "headless": True,
+                "channel": "chrome",
+                "headless": False,
                 "viewport": {
                     "width": 1366, "height": 768
                 },
                 "timezone_id": "Europe/Kyiv",
                 "locale": "uk-UA",
-                "args": [
-                    "--disable-blink-features=AutomationControlled"
-                ]
             }
 
             self._pw = await async_playwright().start()
             self._context = await self._pw.chromium.launch_persistent_context(
+                user_data_dir=self.profile_dir,
                 **context_kwargs
             )
 
@@ -63,7 +70,7 @@ class ChessDriver:
                 await self._context.close()
             except Exception as e:
                 logger.debug(
-                    f"Context close failed (already dead?): {e}"
+                    f"Context close failed: {e}"
                 )
             
             self._context = None
@@ -73,7 +80,7 @@ class ChessDriver:
                 await self._pw.stop()
             except Exception as e:
                 logger.debug(
-                    f"Playwright stop failed (already dead?): {e}"
+                    f"[-] Playwright close failed: {e}"
                 )
                 
             self._pw = None
@@ -85,8 +92,39 @@ class ChessDriver:
             return
 
         logger.warning(
-            "ChessDriver disconnected - reconnecting..."
+            "[-] ChessDriver disconnected - reconnecting..."
         )
 
         await self.close()
         await self.connect()
+
+    async def lunch_bot(
+        self, url: str, attempts: int = 2
+    ):
+        await self._ensure_connected()
+
+        page = (
+            self._context.pages[0]
+            if self._context.pages else await self._context.new_page()
+        )
+
+        for attempt in range(attempts):
+            try:
+                logger.info(
+                    f"Navigating to {url} (attempt {attempt + 1}/{attempts})..."
+                )
+
+                await page.goto(url, wait_until="domcontentloaded")
+
+                logger.info(f"Page loaded: {page.url}")
+                
+                return page
+            except Exception as e:
+                logger.warning(
+                    f"Goto failed (attempt {attempt + 1}/{attempts}): {e}"
+                )
+                
+                await page.wait_for_timeout(3000)
+
+        return page
+        
