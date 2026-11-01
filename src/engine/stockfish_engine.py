@@ -30,7 +30,7 @@ class StockfishEngine:
                 f"{self.path}"
             )
 
-        logger.info("[+] Stockfish connected and ready!")
+        logger.info("[+] Stockfish connected.")
 
         return self
 
