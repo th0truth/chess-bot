@@ -1,14 +1,14 @@
-from typing import Optional, Annotated
+from typing import Optional
 
 from patchright.async_api import TimeoutError as PWTimeout
 from patchright.async_api import (
-    Playwright, BrowserContext,
-    Page, Locator,
+    Playwright, BrowserContext, Page,
     async_playwright
 ) 
 
 from logger import get_logger
 
+from browser.parser import BoardParser
 
 
 logger = get_logger(__name__)
@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 class ChessDriver:
     def __init__(
         self,
-        profile_dir: Optional[str] = "./data/chess_profile"
+        profile_dir: Optional[str] = None
     ):
         self._pw: Optional[Playwright] = None
         self._context: Optional[BrowserContext] = None
@@ -98,14 +98,15 @@ class ChessDriver:
         await self.close()
         await self.connect()
 
-    async def lunch_bot(
+    async def run(
         self, url: str, attempts: int = 2
     ):
         await self._ensure_connected()
 
         page = (
             self._context.pages[0]
-            if self._context.pages else await self._context.new_page()
+            if self._context.pages
+            else await self._context.new_page()
         )
 
         for attempt in range(attempts):
@@ -116,9 +117,7 @@ class ChessDriver:
 
                 await page.goto(url, wait_until="domcontentloaded")
 
-                logger.info(f"Page loaded: {page.url}")
-                
-                return page
+                break
             except Exception as e:
                 logger.warning(
                     f"Goto failed (attempt {attempt + 1}/{attempts}): {e}"
@@ -126,5 +125,15 @@ class ChessDriver:
                 
                 await page.wait_for_timeout(3000)
 
-        return page
+        await self.parse_board(page)
+
+    async def parse_board(self, page: Page):
+        parser = BoardParser()
+
+        await page.wait_for_selector("wc-chess-board .piece")
+
+        fen = await parser.extract_fen(page, "w")
+
+        logger.info(fen)
+
         
