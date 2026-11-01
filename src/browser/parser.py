@@ -24,16 +24,26 @@ class BoardParser:
         js_code = """
             () => {
                 const pieces = [];
-                const pieceElements = document.querySelectorAll('wc-chess-board .piece');
+                const pieceElements = document.querySelectorAll(
+                    'wc-chess-board .piece'
+                );
                 
                 pieceElements.forEach(el => {
                         const classes = Array.from(el.classList);                
-                        const pieceClass = classes.find(c => /^[wb][pnbrqk]$/.test(c));
-                        const squareClass = classes.find(c => /^square-\\d{2}$/.test(c));
+                        const pieceClass = classes.find(
+                            c => /^[wb][pnbrqk]$/.test(c)
+                        );
+                        const squareClass = classes.find(
+                            c => /^square-\\d{2}$/.test(c)
+                        );
 
                         if (pieceClass && squareClass) {
-                            const squareCoord = squareClass.replace('square-', '');
-                            pieces.push({ piece: pieceClass, square: squareCoord });
+                            const squareCoord = squareClass.replace(
+                                'square-', ''
+                            );
+                            pieces.push(
+                                { piece: pieceClass, square: squareCoord }
+                            );
                         }
                 });       
 
