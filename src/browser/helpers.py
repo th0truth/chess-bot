@@ -1,12 +1,9 @@
-
 from browser.driver import ChessDriver
+
+from constants import Chess
 
 
 async def run_driver():
     driver = ChessDriver()
 
-    await driver.lunch_bot(
-        "https://www.chess.com/play/computer"        
-    )
-
-    
+    await driver.run(Chess.COMPUTER)
