@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,10 +10,6 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
-    API_V1_STR: str = "/api/v1"
-
-    CHESS_URL: str = "https://www.chess.com"
-
-    CHESS_PROFILE_DIR: str = ""
+    CHESS_PROFILE_DIR: Optional[str] = None
 
 settings = Settings()
