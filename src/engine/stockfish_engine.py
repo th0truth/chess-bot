@@ -45,6 +45,15 @@ class StockfishEngine:
         board = chess.Board(fen, chess960=chess960)
         time_limit = chess.engine.Limit(time_limit)
 
+        if not board.is_valid():
+            status = board.status()
+
+            if status & chess.STATUS_OPPOSITE_CHECK:
+                board.turn = not board.turn
+
+            if not board.is_valid():
+                return
+        
         try:
             result = await self._engine.play(board, time_limit)
             best_move_uci = result.move.uci() if result.move else None

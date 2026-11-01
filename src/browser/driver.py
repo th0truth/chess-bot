@@ -1,6 +1,5 @@
 from typing import Optional, Literal
 from collections.abc import AsyncGenerator
-import re
 
 from patchright.async_api import (
     Playwright, BrowserContext,
@@ -97,9 +96,10 @@ class ChessDriver:
         if self._context and self._pw:
             return
 
-        logger.warning(
-            "[-] ChessDriver disconnected - reconnecting..."
-        )
+        if not self._context:
+            logger.warning(
+                "[-] ChessDriver disconnected - reconnecting..."
+            )
 
         await self.close()
         await self.connect()
@@ -140,38 +140,50 @@ class ChessDriver:
     async def _activate_bot(self, page: Page):
         board_selector = "wc-chess-board"
 
-        await page.wait_for_selector(f"{board_selector} .piece")
-        board_elem = page.locator(board_selector)
+        while True:
+            await page.wait_for_selector(f"{board_selector} .piece")
+            board_elem = page.locator(board_selector)
 
-        classes = await board_elem.get_attribute("class") or ""
+            classes = await board_elem.get_attribute("class") or ""
 
-        is_flipped = "flipped" in classes
-        my_color = "BLACK" if is_flipped else "WHITE"
-        my_side = "b" if is_flipped else "w"
+            is_flipped = "flipped" in classes
+            my_color = "BLACK" if is_flipped else "WHITE"
+            my_side = "b" if is_flipped else "w"
 
-        logger.info(
-            f"[MATCH JOINED] Playing as: {my_color}"
-        )
+            logger.info(
+                f"[MATCH JOINED] Playing as: {my_color}"
+            )
 
-        async with StockfishEngine() as engine:
-            async for fen in self._parse_board(page, board_elem):
-                active_turn = fen.split()[1]
+            async with StockfishEngine() as engine:
+                async for fen in self._parse_board(page, board_elem):
+                    if not fen:
+                        break
 
-                if active_turn == my_side: 
-                    analysis = await engine.get_best_move(fen)
+                    active_turn = fen.split()[1]
 
-                    if analysis and analysis["move"]:
-                        promotion_piece = (
-                            analysis["move"][4]
-                            if len(analysis["move"]) > 4 else None 
-                        )
+                    if active_turn == my_side: 
+                        analysis = await engine.get_best_move(fen)
 
-                        await Humanize.make_moves(
-                            page, board_elem,
-                            analysis["from_square"],
-                            analysis["to_square"],
-                            is_flipped, promotion_piece
-                        )
+                        if analysis and analysis["move"]:
+                            promotion_piece = (
+                                analysis["move"][4]
+                                if len(analysis["move"]) > 4 else None 
+                            )
+
+                            await Humanize.make_moves(
+                                page, board_elem,
+                                analysis["from_square"],
+                                analysis["to_square"],
+                                is_flipped, promotion_piece
+                            )
+
+            await page.locator(
+                ".game-over-modal-shell-container,"
+                ".game-over-dialog-component,"
+                ".board-dialog-component"
+            ).wait_for(state="hidden")
+
+            await page.wait_for_timeout(5000)
 
     async def _parse_board(
         self, page: Page, board_elem: Locator
@@ -181,14 +193,19 @@ class ChessDriver:
         last_fen = None
 
         while True:
+            if await self._is_game_finished(page):
+                logger.info("[MATCH FINISHED] Game over.")
+
+                return
+            
             active_turn = await self._determine_turn(page, board_elem)
             current_fen = await parser.extract_fen(page, active_turn)
-
+            
             if current_fen != last_fen:
                 last_fen = current_fen
                 yield current_fen
             
-            await page.wait_for_timeout(5000)
+            await page.wait_for_timeout(300)
 
     async def _determine_turn(
         self, page: Page, board_elem: Locator
@@ -204,3 +221,10 @@ class ChessDriver:
             active_turn = "w" if (move_nodes % 2 == 0) else "b"
 
         return active_turn
+
+    async def _is_game_finished(self, page: Page) -> bool:
+        return await page.locator(
+            ".game-over-modal-shell-container,"
+            ".game-over-dialog-component,"
+            ".board-dialog-component"
+        ).is_visible()
