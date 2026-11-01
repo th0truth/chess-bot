@@ -11,7 +11,12 @@ for p in (ROOT_DIR, SRC_DIR):
 from flask import Flask
 
 from config import settings
+from logger import setup_logging
+
 from src.web.api.api import api_main_bp
+
+
+setup_logging()
 
 
 def create_app() -> Flask:
