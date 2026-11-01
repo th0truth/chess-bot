@@ -1,4 +1,5 @@
-from typing import Optional
+from typing import Optional, Literal
+import time
 
 from patchright.async_api import TimeoutError as PWTimeout
 from patchright.async_api import (
@@ -137,8 +138,26 @@ class ChessDriver:
             board_selector
         ).get_attribute("class") or ""
 
-        my_color = "b" if "flipped" in classes else "w"
+        my_color = "BLACK" if "flipped" in classes else "WHITE"
 
+        logger.info(
+            f"[MATCH JOINED] Playing as: {my_color}"
+        )
+
+        last_fen = None
+
+        while True:
+            active_turn = await self._determine_turn(page, board_selector)
+            current_fen = await parser.extract_fen(page, active_turn)
+
+            if current_fen != last_fen:
+                last_fen = current_fen
+            
+            await page.wait_for_timeout(5000)
+
+    async def _determine_turn(
+        self, page: Page, board_selector: str
+    ) -> Literal["w", "b"]:
         has_highlights = await page.locator(
             f"{board_selector} .highlight"
         ).count() > 0
@@ -151,10 +170,4 @@ class ChessDriver:
             ).count()
             active_turn = "w" if (move_nodes % 2 == 0) else "b"
 
-        fen = await parser.extract_fen(page, active_turn)
-
-        logger.info(f"[FEN]: {fen}")
-        logger.info(f"My color: {my_color}")
-
-        return fen
-        
+        return active_turn
