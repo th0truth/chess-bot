@@ -13,11 +13,49 @@ class BoardParser:
     async def extract_fen(
         cls, page: Page, active_turn: str
     ):
-        raw_pieces = await cls._extract_raw_pieces(
-            page 
-        )
+        raw_pieces = await cls._extract_raw_pieces(page)
 
-        return raw_pieces
+        board = [
+            ["" for _ in range(8)]
+            for _ in range(8)
+        ]
+
+        for item in raw_pieces:
+            piece_code = item["piece"]
+            square = item["square"]
+
+            col = int(square[0]) - 1
+            row = 8 - int(square[1])
+
+            fen_char = cls.PIECE_MAP.get(piece_code)
+
+            if fen_char:
+                board[row][col] = fen_char
+
+        fen_rows = []
+
+        for row in board:
+            empty = 0
+            row_str = ""
+
+            for cell in row:
+                if cell == "":
+                    empty += 1
+                else:
+                    if empty > 0:
+                        row_str += str(empty)
+                        empty = 0
+
+                    row_str += cell
+
+            if empty > 0:
+                row_str += str(empty)
+
+            fen_rows.append(row_str)        
+
+        fen = f"{'/'.join(fen_rows)} {active_turn} KQkq - 0 1"
+
+        return fen
 
     @staticmethod
     async def _extract_raw_pieces(page: Page) -> List[Dict[str, str]]:
