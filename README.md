@@ -1,10 +1,10 @@
 # chess-bot
 
-Stealth Chess.com asynchronous bot powered by Stockfish Engine, Patchright (undetected Playwright), and a Flask RESTful API.
+Stealth [Chess.com](https://www.chess.com/) asynchronous bot powered by [Stockfish Engine](https://stockfishchess.org/), Patchright (undetected Playwright), and a Flask RESTful API.
 
 ## Features
 
-- **Stealth Automation**: Uses Patchright with persistent Chrome profiles to bypass Cloudflare CAPTCHA and human-like movements to avoid detections.
+- **Stealth Automation**: Uses [`Patchright`](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright) with persistent Chrome profiles to bypass Cloudflare CAPTCHA and human-like movements to avoid detections.
 - **Board Parsing**: Real-time DOM board scraping and FEN generation from active Chess.com matches.
 - **Engine Analysis**: Stockfish integration via [`python-chess`](https://python-chess.readthedocs.io/en/latest/) for move evaluation.
 - **Dual Control**: Run directly via CLI script or trigger through a local Flask RESTful API.
