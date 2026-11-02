@@ -31,6 +31,9 @@ git clone https://github.com/th0truth/chess-bot.git && cd chess-bot
 ```bash
 cp .env.example .env
 
+# If you want to start the bot with your Chess Profile
+google-chrome-stable --user-data-dir="/path/to/chrome/user-data" https://www.chess.com/login
+
 # Path to your Chrome user profile directory (to keep Chess.com login session)
 CHESS_PROFILE_DIR=/path/to/chrome/user-data
 
