@@ -1,10 +1,11 @@
 from typing import Optional, Literal
 from collections.abc import AsyncGenerator
+import sys
 
 from patchright.async_api import (
-    Playwright, BrowserContext,
+    Playwright, BrowserContext, Error,
     Page, Locator, async_playwright
-) 
+)
 
 from logger import get_logger
 
@@ -141,52 +142,62 @@ class ChessDriver:
         board_selector = "wc-chess-board"
 
         while True:
-            await page.wait_for_selector(f"{board_selector} .piece")
-            board_elem = page.locator(board_selector)
+            if page.is_closed():
+                logger.info("Browser page closed.")
 
-            classes = await board_elem.get_attribute("class") or ""
+                break
 
-            is_flipped = "flipped" in classes
-            my_color = "BLACK" if is_flipped else "WHITE"
-            my_side = "b" if is_flipped else "w"
+            try:
+                await page.wait_for_selector(f"{board_selector} .piece")
+                board_elem = page.locator(board_selector)
 
-            logger.info(
-                f"[MATCH JOINED] Playing as: {my_color}"
-            )
+                classes = await board_elem.get_attribute("class") or ""
+                
+                is_flipped = "flipped" in classes
+                my_color = "BLACK" if is_flipped else "WHITE"
+                my_side = "b" if is_flipped else "w"
 
-            async with StockfishEngine() as engine:
-                async for fen in self._parse_board(page, board_elem):
-                    if not fen:
-                        break
+                logger.info(
+                    f"[MATCH JOINED] Playing as: {my_color}"
+                )
 
-                    active_turn = fen.split()[1]
+                async with StockfishEngine() as engine:
+                    async for fen in self._parse_board(page):
+                        if not fen:
+                            break
 
-                    if active_turn == my_side: 
-                        analysis = await engine.get_best_move(fen)
+                        active_turn = fen.split()[1]
 
-                        if analysis and analysis["move"]:
-                            promotion_piece = (
-                                analysis["move"][4]
-                                if len(analysis["move"]) > 4 else None 
-                            )
+                        if active_turn == my_side: 
+                            analysis = await engine.get_best_move(fen)
 
-                            await Humanize.make_moves(
-                                page, board_elem,
-                                analysis["from_square"],
-                                analysis["to_square"],
-                                is_flipped, promotion_piece
-                            )
+                            if analysis and analysis["move"]:
+                                promotion_piece = (
+                                    analysis["move"][4]
+                                    if len(analysis["move"]) > 4 else None 
+                                )
 
-            await page.locator(
-                ".game-over-modal-shell-container,"
-                ".game-over-dialog-component,"
-                ".board-dialog-component"
-            ).wait_for(state="hidden")
+                                await Humanize.make_moves(
+                                    page, board_elem,
+                                    analysis["from_square"],
+                                    analysis["to_square"],
+                                    is_flipped, promotion_piece
+                                )
 
-            await page.wait_for_timeout(5000)
+                await page.locator(
+                    ".game-over-modal-shell-container,"
+                    ".game-over-dialog-component,"
+                    ".board-dialog-component"
+                ).wait_for(state="hidden")
+
+                await page.wait_for_timeout(5000)
+            except Error:
+                logger.info("Browser was closed.")
+
+                break
 
     async def _parse_board(
-        self, page: Page, board_elem: Locator
+        self, page: Page
     ) -> AsyncGenerator[str, None, None]:
         parser = BoardParser() 
 
@@ -198,29 +209,62 @@ class ChessDriver:
 
                 return
             
-            active_turn = await self._determine_turn(page, board_elem)
+            active_turn = await self._determine_turn(page)
             current_fen = await parser.extract_fen(page, active_turn)
             
             if current_fen != last_fen:
                 last_fen = current_fen
+
                 yield current_fen
             
             await page.wait_for_timeout(300)
 
     async def _determine_turn(
-        self, page: Page, board_elem: Locator
+        self, page: Page
     ) -> Literal["w", "b"]:
-        has_highlights = await board_elem.locator(f".highlight").count() > 0
+           return await page.evaluate(
+                """
+                () => {
+                        const moveNodes = document.querySelectorAll(
+                            'vertical-move-list .node, .move-list-component .node, wc-move-list .node, [data-ply]'
+                        );
+                        if (moveNodes.length > 0) {
+                            return moveNodes.length % 2 === 0 ? 'w' : 'b';
+                        }
 
-        if not has_highlights:
-            active_turn = "w"
-        else:
-            move_nodes = await page.locator(
-                "vertical-move-list .node"
-            ).count()
-            active_turn = "w" if (move_nodes % 2 == 0) else "b"
+                        const highlightEls = document.querySelectorAll('wc-chess-board .highlight');
+                        if (!highlightEls || highlightEls.length < 2) {
+                            return 'w';
+                        }
 
-        return active_turn
+                        const highlightSquares = [];
+                        highlightEls.forEach(el => {
+                            const sqClass = Array.from(el.classList).find(c => /^square-\\d{2}$/.test(c));
+                            if (sqClass) highlightSquares.push(sqClass.replace('square-', ''));
+                        });
+
+                        const pieces = document.querySelectorAll('wc-chess-board .piece');
+                        for (const piece of pieces) {
+                            const classes = Array.from(piece.classList);
+                            const sqClass = classes.find(c => /^square-\\d{2}$/.test(c));
+                            if (!sqClass) continue;
+                            const sq = sqClass.replace('square-', '');
+
+                                    if (highlightSquares.includes(sq)) {
+                                        const pieceType = classes.find(c => /^[wb][pnbrqk]$/.test(c));
+                                        if (pieceType) {
+                                            // If White just moved, next turn is Black ('b')
+                                            // If Black just moved, next turn is White ('w')
+                                            return pieceType[0] === 'w' ? 'b' : 'w';
+                            }
+                            }
+                                }
+
+                        return 'w';
+                    }
+    		    """
+            )
+
 
     async def _is_game_finished(self, page: Page) -> bool:
         return await page.locator(
