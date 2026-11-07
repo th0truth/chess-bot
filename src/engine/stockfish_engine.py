@@ -51,21 +51,16 @@ class StockfishEngine:
             if status & chess.STATUS_OPPOSITE_CHECK:
                 board.turn = not board.turn
 
-            if not board.is_valid():
-                return
-        
         try:
             result = await self._engine.play(board, time_limit)
-            best_move_uci = result.move.uci() if result.move else None
+            best_move_uci = result.move.uci()
 
             return {
                 "move": best_move_uci,
-                "from_square": best_move_uci[:2] or None,
-                "to_square": best_move_uci[2:4] or None
+                "from_square": best_move_uci[:2],
+                "to_square": best_move_uci[2:4]
             }
-        except (
-            chess.engine.EngineTerminatedError, chess.engine.EngineError
-        ) as e:
+        except Exception as e:
             logger.warning(
                 f"Engine connection dropped: {e}, reconnecting..."
             )
